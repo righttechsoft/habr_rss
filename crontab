@@ -1,0 +1,3 @@
+# Crontab for habr_rss application
+# Run hourly tasks every 10 minutes
+*/10 * * * * root /bin/bash -c ". /run/supervisord.env; /app/hourly_tasks.sh" >/proc/1/fd/1 2>/proc/1/fd/2

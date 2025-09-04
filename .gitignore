@@ -1,0 +1,7 @@
+.idea
+.claude
+.env
+db/
+habr_articles.db-wal
+habr_articles.db-shm
+habr_articles.db
