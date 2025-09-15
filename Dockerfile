@@ -14,6 +14,12 @@ RUN apt-get update && apt-get install -y \
 # Copy application files
 COPY . .
 
+# Ensure proper permissions for database directory
+RUN mkdir -p /app/db && chmod 755 /app/db
+
+# Change ownership back to deno user
+RUN chown -R deno:deno /app
+
 # Make scripts executable
 RUN chmod +x /app/hourly_tasks.sh /app/start.sh
 
