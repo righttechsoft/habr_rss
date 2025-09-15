@@ -44,7 +44,7 @@ ENV PORT=8000
 ENV DENO_DIR=/app/.deno_cache
 
 # Health check (commented out for debugging)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:8000/ || exit 1
 
 # Start supervisor which manages both cron and the web app
