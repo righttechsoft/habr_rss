@@ -287,9 +287,19 @@ async function handler(req: Request): Promise<Response> {
   }
 
   if (url.pathname === '/') {
+    const userAgent = req.headers.get('user-agent') || 'Unknown';
+
+    // Skip detailed logging for curl requests (healthchecks)
+    if (userAgent.toLowerCase().startsWith('curl/')) {
+      console.log(`[HEALTHCHECK] ${new Date().toISOString()} - Healthcheck request from ${userAgent}`);
+      return new Response('OK', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      });
+    }
+
     // Reset tracking on page load/reload to avoid marking based on stale previous request data
     const timestamp = new Date().toISOString();
-    const userAgent = req.headers.get('user-agent') || 'Unknown';
     const referer = req.headers.get('referer') || 'Direct';
     const acceptLanguage = req.headers.get('accept-language') || 'Unknown';
     const clientIP = req.headers.get('x-forwarded-for') ||
