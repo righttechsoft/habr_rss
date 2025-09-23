@@ -304,7 +304,11 @@ async function handler(req: Request): Promise<Response> {
     console.log(`[PAGE_LOAD]   - User-Agent: ${userAgent}`);
     console.log(`[PAGE_LOAD]   - Referer: ${referer}`);
     console.log(`[PAGE_LOAD]   - Accept-Language: ${acceptLanguage}`);
-    console.log(`[PAGE_LOAD]   - Headers count: ${req.headers.entries().length || 0}`);
+    const headers = Array.from(req.headers.entries());
+    console.log(`[PAGE_LOAD]   - Headers (${headers.length}):`);
+    headers.forEach(([name, value]) => {
+      console.log(`[PAGE_LOAD]     ${name}: ${value}`);
+    });
     console.log(`[PAGE_LOAD] State before reset:`);
     console.log(`[PAGE_LOAD]   - Previous batch GUIDs count: ${previousBatchGuids.length}`);
     console.log(`[PAGE_LOAD]   - Clearing batch tracking state`);
