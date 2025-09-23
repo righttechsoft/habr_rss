@@ -288,8 +288,27 @@ async function handler(req: Request): Promise<Response> {
 
   if (url.pathname === '/') {
     // Reset tracking on page load/reload to avoid marking based on stale previous request data
-    console.log(`[PAGE] Page load/reload - resetting previousBatchGuids`);
-    console.log(`[PAGE] Clearing ${previousBatchGuids.length} previous batch GUIDs`);
+    const timestamp = new Date().toISOString();
+    const userAgent = req.headers.get('user-agent') || 'Unknown';
+    const referer = req.headers.get('referer') || 'Direct';
+    const acceptLanguage = req.headers.get('accept-language') || 'Unknown';
+    const clientIP = req.headers.get('x-forwarded-for') ||
+                     req.headers.get('x-real-ip') ||
+                     'Unknown';
+
+    console.log(`[PAGE_LOAD] ${timestamp} - Page load/reload detected`);
+    console.log(`[PAGE_LOAD] Request details:`);
+    console.log(`[PAGE_LOAD]   - Method: ${req.method}`);
+    console.log(`[PAGE_LOAD]   - URL: ${req.url}`);
+    console.log(`[PAGE_LOAD]   - Client IP: ${clientIP}`);
+    console.log(`[PAGE_LOAD]   - User-Agent: ${userAgent}`);
+    console.log(`[PAGE_LOAD]   - Referer: ${referer}`);
+    console.log(`[PAGE_LOAD]   - Accept-Language: ${acceptLanguage}`);
+    console.log(`[PAGE_LOAD]   - Headers count: ${req.headers.entries().length || 0}`);
+    console.log(`[PAGE_LOAD] State before reset:`);
+    console.log(`[PAGE_LOAD]   - Previous batch GUIDs count: ${previousBatchGuids.length}`);
+    console.log(`[PAGE_LOAD]   - Clearing batch tracking state`);
+
     previousBatchGuids = [];
     const htmlTemplate = await loadHtmlTemplate();
     return new Response(htmlTemplate, {
