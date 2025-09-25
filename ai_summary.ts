@@ -12,6 +12,7 @@ interface ArticleRecord {
   pub_date: string | null;
   viewed: number;
   ai_sumamry: string | null;
+  full_text: string | null;
 }
 
 // Initialize database connection
@@ -30,17 +31,24 @@ try {
   // Column probably already exists, ignore error
 }
 
+// Ensure the full_text column exists
+try {
+  db.prepare("ALTER TABLE rss_items ADD COLUMN full_text TEXT").run();
+} catch (error) {
+  // Column probably already exists, ignore error
+}
+
 function getArticlesNeedingSummary(limit: number = 5): ArticleRecord[] {
   const stmt = db.prepare(`
-    SELECT guid, title, link, description, pub_date, viewed, ai_sumamry
+    SELECT guid, title, link, description, pub_date, viewed, ai_sumamry, full_text
     FROM rss_items
-    WHERE viewed = 0 
+    WHERE viewed = 0
     AND (ai_sumamry IS NULL OR ai_sumamry = '')
     AND link IS NOT NULL
     ORDER BY pub_date ASC, guid ASC
     LIMIT ?
   `);
-  
+
   const result = stmt.all(limit);
   return result as unknown as ArticleRecord[];
 }
@@ -146,13 +154,13 @@ Summary:`;
   }
 }
 
-function saveSummary(guid: string, summary: string): boolean {
+function saveSummaryAndFullText(guid: string, summary: string, fullText: string): boolean {
   try {
-    const stmt = db.prepare("UPDATE rss_items SET ai_sumamry = ? WHERE guid = ?");
-    const result = stmt.run(summary, guid);
+    const stmt = db.prepare("UPDATE rss_items SET ai_sumamry = ?, full_text = ? WHERE guid = ?");
+    const result = stmt.run(summary, fullText, guid);
     return result.changes > 0;
   } catch (error) {
-    console.error(`Error saving summary for ${guid}:`, error);
+    console.error(`Error saving summary and full text for ${guid}:`, error);
     return false;
   }
 }
@@ -187,13 +195,13 @@ async function processArticle(article: ArticleRecord): Promise<boolean> {
   
   console.log(`Generated summary: ${summary.substring(0, 100)}...`);
   
-  // Save summary to database
-  const saved = saveSummary(article.guid, summary);
+  // Save summary and full text to database
+  const saved = saveSummaryAndFullText(article.guid, summary, html);
   if (saved) {
-    console.log(`✓ Summary saved for: ${article.title}`);
+    console.log(`✓ Summary and full text saved for: ${article.title}`);
     return true;
   } else {
-    console.error(`✗ Failed to save summary for: ${article.title}`);
+    console.error(`✗ Failed to save summary and full text for: ${article.title}`);
     return false;
   }
 }

@@ -10,4 +10,5 @@ export interface RssItem {
 
 export interface RssItemWithImage extends RssItem {
   imageUrl: string | null;
+  full_text?: string | null;
 }

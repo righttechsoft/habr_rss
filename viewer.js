@@ -67,10 +67,32 @@ function createArticleElement(article) {
     
     titleElement.appendChild(titleLink);
 
-    // Meta (date)
+    // Meta (date) and Cached button container
     const metaElement = document.createElement('div');
     metaElement.className = 'article-meta';
-    metaElement.textContent = article.pub_date ? new Date(article.pub_date).toLocaleString() : 'No date';
+
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = article.pub_date ? new Date(article.pub_date).toLocaleString() : 'No date';
+    metaElement.appendChild(dateSpan);
+
+    // Add Cached button if full_text is available
+    if (article.full_text && article.full_text.trim()) {
+        const cachedButton = document.createElement('button');
+        cachedButton.className = 'cached-button';
+        cachedButton.textContent = 'Cached';
+        cachedButton.title = 'View cached article content';
+
+        cachedButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Open cached content in new tab
+            const cachedUrl = `/api/cached/${encodeURIComponent(article.guid)}`;
+            window.open(cachedUrl, '_blank', 'noopener,noreferrer');
+        });
+
+        metaElement.appendChild(cachedButton);
+    }
 
     // Description
     const descElement = document.createElement('div');

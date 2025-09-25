@@ -36,6 +36,7 @@ try {
       link TEXT,
       description TEXT,
       pub_date TEXT,
+      full_text TEXT,
       viewed INTEGER DEFAULT 0,
       ai_sumamry TEXT
     )
@@ -81,11 +82,11 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
     console.log(`[FETCH] Getting unviewed items: offset=${offset}, limit=${limit}`);
     
     const stmt = db.prepare(`
-      SELECT guid, title, link, description, pub_date, viewed, ai_sumamry
+      SELECT guid, title, link, description, pub_date, viewed, ai_sumamry, full_text
       FROM rss_items
       WHERE viewed = 0
       ORDER BY pub_date ASC, guid ASC
-      LIMIT ? 
+      LIMIT ?
     `);
     const result = stmt.all(limit) as Array<{
       guid: string;
@@ -95,6 +96,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
       pub_date: string | null;
       viewed: number;
       ai_sumamry: string | null;
+      full_text: string | null;
     }>;
 
     console.log(`[FETCH] Query returned ${result.length} items`);
@@ -108,7 +110,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
       // Store the GUID for marking as viewed later
       currentBatchGuids.push(row.guid);
       
-      console.log(`[FETCH] Adding to batch: "${row.title?.substring(0, 60)}..." (viewed=${row.viewed})`);
+      console.log(`[FETCH] Adding to batch: "${row.title?.substring(0, 60)}..." (viewed=${row.viewed}, has_full_text=${!!(row.full_text && row.full_text.trim())})`);
 
       items.push({
         guid: row.guid,
@@ -118,6 +120,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
         pub_date: row.pub_date,
         viewed: row.viewed,
         ai_sumamry: row.ai_sumamry,
+        full_text: row.full_text,
         imageUrl: imageUrl
       });
     }
@@ -282,6 +285,63 @@ async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: 'Failed to mark final batch' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json; charset=utf-8' }
+      });
+    }
+  }
+
+  // API endpoint to serve cached full text content
+  if (url.pathname.startsWith('/api/cached/') && req.method === 'GET') {
+    const encodedGuid = url.pathname.slice('/api/cached/'.length);
+    const guid = decodeURIComponent(encodedGuid);
+    console.log(`[CACHED] Request for encoded GUID: ${encodedGuid}`);
+    console.log(`[CACHED] Decoded GUID: ${guid}`);
+
+    try {
+      const stmt = db.prepare('SELECT title, full_text FROM rss_items WHERE guid = ?');
+      const result = stmt.get(guid) as { title: string | null; full_text: string | null } | undefined;
+
+      console.log(`[CACHED] Query result:`, result);
+      console.log(`[CACHED] Has result: ${!!result}`);
+      console.log(`[CACHED] Has full_text: ${!!(result?.full_text)}`);
+      console.log(`[CACHED] Full text length: ${result?.full_text?.length || 0}`);
+
+      if (!result) {
+        console.log(`[CACHED] No record found for GUID: ${guid}`);
+        return new Response('Article not found', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
+
+      if (!result.full_text) {
+        console.log(`[CACHED] No full_text for GUID: ${guid}`);
+        return new Response('Cached content not available for this article', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
+
+      const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(result.title || 'Cached Article')}</title>
+</head>
+<body>
+    <h1>${escapeHtml(result.title || 'Cached Article')}</h1>
+    <div class="content">${result.full_text}</div>
+</body>
+</html>`;
+
+      return new Response(htmlContent, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    } catch (error) {
+      console.error('Error serving cached content:', error);
+      return new Response('Error serving cached content', {
+        status: 500,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
     }
   }
