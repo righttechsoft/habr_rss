@@ -248,12 +248,19 @@ loadArticles().then(() => {
 
 loadMoreButton.addEventListener('click', loadArticles);
 
-// Infinite scroll with debounce
+// Infinite scroll with debounce - trigger only when last article is fully scrolled past
 let scrollTimeout;
 window.addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
-        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 1000) {
+        const articles = document.querySelectorAll('.article');
+        if (articles.length === 0) return;
+
+        const lastArticle = articles[articles.length - 1];
+        const lastArticleRect = lastArticle.getBoundingClientRect();
+
+        // Trigger loading when the last article has been completely scrolled past
+        if (lastArticleRect.bottom <= window.innerHeight) {
             if (hasMore && !isLoading) {
                 loadArticles();
             }

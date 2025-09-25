@@ -158,24 +158,21 @@ function markPreviousBatchAsViewed(): void {
     `);
     const result = stmt.run(...previousBatchGuids);
     console.log(`[MARK] Successfully marked ${result.changes} items as viewed (expected: ${previousBatchGuids.length})`);
-    
+
+    // Always log which articles were marked as viewed
+    const checkStmt = db.prepare(`
+      SELECT guid, title, viewed FROM rss_items
+      WHERE guid IN (${placeholders})
+    `);
+    const checkResult = checkStmt.all(...previousBatchGuids) as Array<{guid: string, title: string, viewed: number}>;
+    console.log(`[MARK] Articles marked as viewed:`);
+    checkResult.forEach(row => {
+      const title = row.title?.substring(0, 60) || 'Unknown title';
+      console.log(`[MARK] ✓ "${title}..." (viewed=${row.viewed})`);
+    });
+
     if (result.changes !== previousBatchGuids.length) {
       console.warn(`[MARK] WARNING: Expected to mark ${previousBatchGuids.length} items but only marked ${result.changes}`);
-      
-      // Check which items were actually marked
-      const checkStmt = db.prepare(`
-        SELECT guid, viewed FROM rss_items 
-        WHERE guid IN (${placeholders})
-      `);
-      const checkResult = checkStmt.all(...previousBatchGuids) as Array<{guid: string, viewed: number}>;
-      console.log(`[MARK] Status check for marked items:`);
-      checkResult.forEach(row => {
-        // Get title for this GUID
-        const titleStmt = db.prepare('SELECT title FROM rss_items WHERE guid = ?');
-        const titleResult = titleStmt.get(row.guid) as {title: string} | undefined;
-        const title = titleResult?.title?.substring(0, 60) || 'Unknown title';
-        console.log(`[MARK] - "${title}..." viewed=${row.viewed}`);
-      });
     }
   } catch (error) {
     console.error("[MARK] Error marking batch as viewed:", error);
@@ -359,30 +356,6 @@ async function handler(req: Request): Promise<Response> {
     }
 
     // Reset tracking on page load/reload to avoid marking based on stale previous request data
-    const timestamp = new Date().toISOString();
-    const referer = req.headers.get('referer') || 'Direct';
-    const acceptLanguage = req.headers.get('accept-language') || 'Unknown';
-    const clientIP = req.headers.get('x-forwarded-for') ||
-                     req.headers.get('x-real-ip') ||
-                     'Unknown';
-
-    console.log(`[PAGE_LOAD] ${timestamp} - Page load/reload detected`);
-    console.log(`[PAGE_LOAD] Request details:`);
-    console.log(`[PAGE_LOAD]   - Method: ${req.method}`);
-    console.log(`[PAGE_LOAD]   - URL: ${req.url}`);
-    console.log(`[PAGE_LOAD]   - Client IP: ${clientIP}`);
-    console.log(`[PAGE_LOAD]   - User-Agent: ${userAgent}`);
-    console.log(`[PAGE_LOAD]   - Referer: ${referer}`);
-    console.log(`[PAGE_LOAD]   - Accept-Language: ${acceptLanguage}`);
-    const headers = Array.from(req.headers.entries());
-    console.log(`[PAGE_LOAD]   - Headers (${headers.length}):`);
-    headers.forEach(([name, value]) => {
-      console.log(`[PAGE_LOAD]     ${name}: ${value}`);
-    });
-    console.log(`[PAGE_LOAD] State before reset:`);
-    console.log(`[PAGE_LOAD]   - Previous batch GUIDs count: ${previousBatchGuids.length}`);
-    console.log(`[PAGE_LOAD]   - Clearing batch tracking state`);
-
     previousBatchGuids = [];
     const htmlTemplate = await loadHtmlTemplate();
     return new Response(htmlTemplate, {
