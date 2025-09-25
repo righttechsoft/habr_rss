@@ -85,7 +85,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
       SELECT guid, title, link, description, pub_date, viewed, ai_sumamry, full_text
       FROM rss_items
       WHERE viewed = 0
-      ORDER BY pub_date ASC, guid ASC
+      ORDER BY rowid
       LIMIT ?
     `);
     const result = stmt.all(limit) as Array<{
