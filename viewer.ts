@@ -324,6 +324,10 @@ async function handler(req: Request): Promise<Response> {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtml(result.title || 'Cached Article')}</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="manifest" href="/static/site.webmanifest">
 </head>
 <body>
     <h1>${escapeHtml(result.title || 'Cached Article')}</h1>
@@ -385,6 +389,34 @@ async function handler(req: Request): Promise<Response> {
       });
     } catch (error) {
       return new Response('JS file not found', { status: 404 });
+    }
+  }
+
+  // Serve static files from /static/ folder
+  if (url.pathname.startsWith('/static/')) {
+    const fileName = url.pathname.slice('/static/'.length);
+    const filePath = `./static/${fileName}`;
+
+    try {
+      const content = await Deno.readFile(filePath);
+
+      // Determine content type based on extension
+      let contentType = 'application/octet-stream';
+      if (fileName.endsWith('.png')) {
+        contentType = 'image/png';
+      } else if (fileName.endsWith('.ico')) {
+        contentType = 'image/x-icon';
+      } else if (fileName.endsWith('.webmanifest') || fileName.endsWith('.json')) {
+        contentType = 'application/manifest+json';
+      } else if (fileName.endsWith('.svg')) {
+        contentType = 'image/svg+xml';
+      }
+
+      return new Response(content, {
+        headers: { 'Content-Type': contentType }
+      });
+    } catch (error) {
+      return new Response('Static file not found', { status: 404 });
     }
   }
 
