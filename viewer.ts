@@ -38,11 +38,20 @@ try {
       pub_date TEXT,
       full_text TEXT,
       viewed INTEGER DEFAULT 0,
-      ai_sumamry TEXT
+      ai_sumamry TEXT,
+      unavailable INTEGER DEFAULT 0
     )
   `);
   createTableStmt.run();
   console.log("Table created successfully");
+
+  // Ensure unavailable column exists (for existing databases)
+  try {
+    db.prepare("ALTER TABLE rss_items ADD COLUMN unavailable INTEGER DEFAULT 0").run();
+    console.log("Added 'unavailable' column");
+  } catch (_e) {
+    // Column already exists
+  }
   
   // Test if we can prepare a simple query
   console.log("Testing database with simple query...");
@@ -82,7 +91,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
     console.log(`[FETCH] Getting unviewed items: offset=${offset}, limit=${limit}`);
     
     const stmt = db.prepare(`
-      SELECT guid, title, link, description, pub_date, viewed, ai_sumamry, full_text
+      SELECT guid, title, link, description, pub_date, viewed, ai_sumamry, full_text, unavailable
       FROM rss_items
       WHERE viewed = 0
       ORDER BY rowid
@@ -97,6 +106,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
       viewed: number;
       ai_sumamry: string | null;
       full_text: string | null;
+      unavailable: number;
     }>;
 
     console.log(`[FETCH] Query returned ${result.length} items`);
@@ -121,6 +131,7 @@ function getUnviewedItems(offset: number, limit: number): RssItemWithImage[] {
         viewed: row.viewed,
         ai_sumamry: row.ai_sumamry,
         full_text: row.full_text,
+        unavailable: row.unavailable,
         imageUrl: imageUrl
       });
     }
@@ -288,22 +299,34 @@ async function handler(req: Request): Promise<Response> {
 
   // API endpoint to serve cached full text content
   if (url.pathname.startsWith('/api/cached/') && req.method === 'GET') {
-    const encodedGuid = url.pathname.slice('/api/cached/'.length);
-    const guid = decodeURIComponent(encodedGuid);
-    console.log(`[CACHED] Request for encoded GUID: ${encodedGuid}`);
-    console.log(`[CACHED] Decoded GUID: ${guid}`);
+    const encodedKey = url.pathname.slice('/api/cached/'.length);
+    const key = decodeURIComponent(encodedKey);
+    console.log(`[CACHED] Request for key: ${key}`);
 
     try {
-      const stmt = db.prepare('SELECT title, full_text FROM rss_items WHERE guid = ?');
-      const result = stmt.get(guid) as { title: string | null; full_text: string | null } | undefined;
+      // Try to find by clean link first (link starts with the key), then by guid
+      let result: { title: string | null; full_text: string | null } | undefined;
 
-      console.log(`[CACHED] Query result:`, result);
+      // If key looks like a URL, search by link prefix
+      if (key.startsWith('http')) {
+        const stmt = db.prepare('SELECT title, full_text FROM rss_items WHERE link LIKE ? LIMIT 1');
+        result = stmt.get(key + '%') as { title: string | null; full_text: string | null } | undefined;
+        console.log(`[CACHED] Searched by link prefix: ${key}`);
+      }
+
+      // Fall back to guid search
+      if (!result) {
+        const stmt = db.prepare('SELECT title, full_text FROM rss_items WHERE guid = ?');
+        result = stmt.get(key) as { title: string | null; full_text: string | null } | undefined;
+        console.log(`[CACHED] Searched by guid: ${key}`);
+      }
+
       console.log(`[CACHED] Has result: ${!!result}`);
       console.log(`[CACHED] Has full_text: ${!!(result?.full_text)}`);
       console.log(`[CACHED] Full text length: ${result?.full_text?.length || 0}`);
 
       if (!result) {
-        console.log(`[CACHED] No record found for GUID: ${guid}`);
+        console.log(`[CACHED] No record found for key: ${key}`);
         return new Response('Article not found', {
           status: 404,
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
@@ -311,7 +334,7 @@ async function handler(req: Request): Promise<Response> {
       }
 
       if (!result.full_text) {
-        console.log(`[CACHED] No full_text for GUID: ${guid}`);
+        console.log(`[CACHED] No full_text for key: ${key}`);
         return new Response('Cached content not available for this article', {
           status: 404,
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
@@ -384,6 +407,9 @@ async function handler(req: Request): Promise<Response> {
       let jsContent = await loadStaticFile('./viewer.js');
       // Replace the hardcoded batch size with the actual value
       jsContent = jsContent.replace('const batchSize = 10;', `const batchSize = ${BATCH_SIZE};`);
+      // Inject SERVER_URL for cached article links
+      const serverUrl = Deno.env.get("SERVER_URL") || `http://localhost:${port}`;
+      jsContent = jsContent.replace("const serverUrl = '';", `const serverUrl = '${serverUrl}';`);
       return new Response(jsContent, {
         headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
       });

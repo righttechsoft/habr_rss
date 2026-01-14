@@ -19,6 +19,7 @@ habr_rss/
 ├── static/                 # Static assets (favicons, manifest)
 ├── fetch_articles.ts       # RSS fetcher (entry point)
 ├── ai_summary.ts           # AI summary generator (entry point)
+├── check_availability.ts   # Link availability checker (entry point)
 ├── viewer.ts               # Web server (entry point)
 ├── viewer.types.ts         # TypeScript type definitions
 ├── viewer.html             # HTML template
@@ -38,6 +39,7 @@ habr_rss/
 |--------|---------|---------|
 | `fetch_articles.ts` | `deno run --allow-net --allow-read --allow-write --allow-env fetch_articles.ts` | Fetches RSS feed from Habr, stores new articles in SQLite |
 | `ai_summary.ts` | `deno run --allow-net --allow-read --allow-write --allow-env ai_summary.ts` | Generates AI summaries for unviewed articles |
+| `check_availability.ts` | `deno run --allow-net --allow-read --allow-write check_availability.ts` | Checks if article links return 403, marks unavailable |
 | `viewer.ts` | `deno run --allow-net --allow-read --allow-write --allow-env viewer.ts` | Starts HTTP server on port 8000 |
 
 Windows batch files: `fetch.bat`, `view.bat`
@@ -53,7 +55,8 @@ CREATE TABLE rss_items (
   pub_date TEXT,              -- Publication date
   viewed INTEGER DEFAULT 0,   -- View status (0=unviewed, 1=viewed)
   ai_sumamry TEXT,            -- AI summary (note: typo preserved for compatibility)
-  full_text TEXT              -- Cached full article HTML
+  full_text TEXT,             -- Cached full article HTML
+  unavailable INTEGER DEFAULT 0  -- Link returns 403 (0=available, 1=unavailable)
 )
 ```
 
@@ -77,6 +80,7 @@ CREATE TABLE rss_items (
 |----------|----------|---------|-------------|
 | `MISTRAL_API_KEY` | No | - | Mistral AI API key for summaries |
 | `PORT` | No | 8000 | HTTP server port |
+| `SERVER_URL` | No | http://localhost:PORT | Base URL for cached article links |
 | `HEALTHCHECK_URL` | No | - | Optional monitoring webhook |
 
 ## Architecture Notes
@@ -93,8 +97,9 @@ CREATE TABLE rss_items (
 
 ### Data Flow
 1. `fetch_articles.ts` → Inserts new RSS items (INSERT OR IGNORE)
-2. `ai_summary.ts` → Fetches full content, calls Mistral, updates summary
-3. `viewer.ts` → Serves articles, tracks views, provides cached content
+2. `check_availability.ts` → Checks unread article links, marks 403s as unavailable
+3. `ai_summary.ts` → Fetches full content, calls Mistral, updates summary
+4. `viewer.ts` → Serves articles, tracks views, provides cached content
 
 ## Dependencies
 
@@ -108,6 +113,9 @@ Run locally:
 ```bash
 # Fetch articles
 deno run -A fetch_articles.ts
+
+# Check article availability
+deno run -A check_availability.ts
 
 # Generate AI summaries (requires MISTRAL_API_KEY in .env)
 deno run -A ai_summary.ts

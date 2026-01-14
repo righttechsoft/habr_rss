@@ -6,6 +6,7 @@ export interface RssItem {
   pub_date: string | null;
   viewed: number;
   ai_sumamry?: string | null;
+  unavailable?: number;
 }
 
 export interface RssItemWithImage extends RssItem {

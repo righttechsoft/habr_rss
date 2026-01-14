@@ -1,5 +1,26 @@
 let offset = 0;
 const batchSize = 10; // This will be dynamically set by the server
+const serverUrl = ''; // This will be dynamically set by the server
+
+// Remove query params from URL to get clean link
+function cleanLink(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url);
+        return parsed.origin + parsed.pathname;
+    } catch (e) {
+        return url;
+    }
+}
+
+// Get the appropriate link for an article (cached if unavailable)
+function getArticleLink(article) {
+    if (article.unavailable && article.full_text && article.full_text.trim()) {
+        const clean = cleanLink(article.link);
+        return `${serverUrl}/api/cached/${encodeURIComponent(clean)}`;
+    }
+    return article.link || '#';
+}
 const articlesContainer = document.getElementById('articles-container');
 const loadMoreButton = document.getElementById('load-more');
 const endMessage = document.getElementById('end-message');
@@ -47,24 +68,31 @@ function createArticleElement(article) {
     const titleElement = document.createElement('h2');
     titleElement.className = 'article-title';
     const titleLink = document.createElement('a');
-    titleLink.href = article.link || '#';
+    const articleLink = getArticleLink(article);
+    titleLink.href = articleLink;
     titleLink.target = '_blank';
     titleLink.rel = 'noopener noreferrer';
     titleLink.textContent = article.title ? escapeHtml(article.title) : 'No title';
-    
+
+    // Add visual indicator if using cached version
+    if (article.unavailable && article.full_text && article.full_text.trim()) {
+        titleLink.title = 'Original article unavailable - opening cached version';
+        titleLink.style.color = '#888';
+    }
+
     // Add click handler to open in background tab
     titleLink.addEventListener('click', function(e) {
-        if (article.link && article.link !== '#') {
+        if (articleLink && articleLink !== '#') {
             e.preventDefault();
             // Open in new tab without focusing (background tab)
-            const newTab = window.open(article.link, '_blank', 'noopener,noreferrer');
+            const newTab = window.open(articleLink, '_blank', 'noopener,noreferrer');
             if (newTab) {
                 newTab.blur();
                 window.focus();
             }
         }
     });
-    
+
     titleElement.appendChild(titleLink);
 
     // Meta (date) and Cached button container
