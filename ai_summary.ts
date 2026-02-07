@@ -206,9 +206,28 @@ async function processArticle(article: ArticleRecord): Promise<boolean> {
   }
 }
 
+const LOCK_FILE = "db/ai_summary.lock";
+
 async function main() {
+  // Prevent concurrent runs
+  try {
+    Deno.statSync(LOCK_FILE);
+    console.log("Already running (lock file exists), exiting.");
+    return;
+  } catch {
+    Deno.writeTextFileSync(LOCK_FILE, String(Date.now()));
+  }
+
+  try {
+    await run();
+  } finally {
+    try { Deno.removeSync(LOCK_FILE); } catch { /* ignore */ }
+  }
+}
+
+async function run() {
   console.log("Starting AI summary generation...");
-  
+
   // Check if API key is available
   if (!Deno.env.get("MISTRAL_API_KEY")) {
     console.error("MISTRAL_API_KEY environment variable is required");
